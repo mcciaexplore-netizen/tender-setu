@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum TenderCategory {
+  CONSTRUCTION
+  IT_SERVICES
+  MEDICAL
+  ELECTRICAL
+  STATIONERY
+  TRANSPORTATION
+  PLUMBING
+  CONSULTING
+  OTHER
+}
+
+enum SourcePortal {
+  CPPP
+  GEM
+  MAHATENDERS
+  TNTENDERS
+  RAJASTHAN_EPROC
+  IREPS
+  OTHER
+}
+
+enum TenderStatus {
+  OPEN
+  CLOSING_SOON
+  CLOSED
+  CANCELLED
+}
+
+enum AlertChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum AlertFrequency {
+  INSTANT
+  DAILY_DIGEST
+  WEEKLY_DIGEST
+}
+
+enum BookmarkStage {
+  DISCOVERED
+  EVALUATING
+  PREPARING
+  SUBMITTED
+  AWARDED
+}
+
+enum ScraperStatus {
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+// ─────────────────────────────────────────────
+// Models
+// ─────────────────────────────────────────────
+
+model Tender {
+  id               String         @id @default(uuid())
+  title            String
+  referenceNumber  String
+  description      String
+  issuingAuthority String
+  department       String
+  category         TenderCategory
+  state            String
+  district         String
+  city             String
+  estimatedValue   Decimal        @db.Decimal(18, 2)
+  emdAmount        Decimal        @db.Decimal(18, 2)
+  publishedDate    DateTime
+  submissionDeadline DateTime
+  prebidMeetingDate  DateTime?
+  tenderDocUrl     String
+  sourceUrl        String
+  sourcePortal     SourcePortal
+  status           TenderStatus
+  rawHtml          String?        @db.Text
+  pdfStorageUrl    String?
+  scrapedAt        DateTime       @default(now())
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  bookmarks        Bookmark[]
+
+  @@index([submissionDeadline])
+  @@index([category])
+  @@index([state])
+  @@index([sourcePortal])
+  @@index([status])
+  @@index([publishedDate])
+  @@index([category, state, status])
+}
+
+model User {
+  id                   String           @id @default(uuid())
+  name                 String
+  email                String           @unique
+  phone                String           @unique
+  password             String
+  companyName          String
+  udyamNumber          String?
+  gstNumber            String?
+  turnover             Decimal?         @db.Decimal(18, 2)
+  state                String
+  district             String
+  preferredCategories  TenderCategory[]
+  preferredStates      String[]
+  isVerified           Boolean          @default(false)
+  createdAt            DateTime         @default(now())
+
+  alerts               Alert[]
+  bookmarks            Bookmark[]
+}
+
+model Alert {
+  id         String         @id @default(uuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  categories TenderCategory[]
+  states     String[]
+  minValue   Decimal?       @db.Decimal(18, 2)
+  maxValue   Decimal?       @db.Decimal(18, 2)
+  keywords   String[]
+  isActive   Boolean        @default(true)
+  channel    AlertChannel
+  frequency  AlertFrequency
+  createdAt  DateTime       @default(now())
+
+  @@index([userId])
+}
+
+model Bookmark {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenderId  String
+  tender    Tender        @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  stage     BookmarkStage
+  notes     String?       @db.Text
+  createdAt DateTime      @default(now())
+
+  @@unique([userId, tenderId])
+  @@index([userId])
+  @@index([tenderId])
+}
+
+model ScraperLog {
+  id              String        @id @default(uuid())
+  sourcePortal    SourcePortal
+  status          ScraperStatus
+  tendersFound    Int           @default(0)
+  tendersNew      Int           @default(0)
+  tendersUpdated  Int           @default(0)
+  errorMessage    String?
+  startedAt       DateTime
+  completedAt     DateTime
+  duration        Int           // seconds
+
+  @@index([sourcePortal])
+  @@index([startedAt])
+}
